@@ -1,0 +1,1252 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Certificatones - SENA</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <!-- Firebase -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, addDoc, getDocs, updateDoc, deleteDoc, query, where, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "your-api-key", authDomain: "your-auth-domain", projectId: "your-project-id" };
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'sena-certificatones-app';
+        
+        window.firebaseContext = {
+            initializeApp, getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken,
+            getFirestore, doc, getDoc, setDoc, onSnapshot, collection, addDoc, getDocs, updateDoc, deleteDoc, query, where, writeBatch,
+            firebaseConfig, appId
+        };
+    </script>
+
+    <style>
+        :root {
+            --sena-green-dark: #00324D;
+            --sena-green-light: #39A900;
+            --sena-orange: #FF6C00;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5;
+        }
+        .header {
+            background-color: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(200, 200, 200, 0.2);
+        }
+        .aurora-background {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            overflow: hidden;
+            z-index: -1;
+        }
+        .aurora-background::before, .aurora-background::after {
+            content: ''; position: absolute;
+            width: 100vw; height: 100vh;
+            background: radial-gradient(circle at var(--x) var(--y), var(--sena-green-light), transparent 40%);
+            opacity: 0.15;
+            animation: aurora 20s linear infinite alternate;
+        }
+        .aurora-background::after {
+            background: radial-gradient(circle at var(--x2) var(--y2), var(--sena-green-dark), transparent 50%);
+            animation-delay: 5s;
+        }
+        @keyframes aurora {
+            0% { transform: translate(var(--tx), var(--ty)) scale(1); }
+            100% { transform: translate(calc(var(--tx) * -1), calc(var(--ty) * -1)) scale(1.5); }
+        }
+        
+        /* NEW 3D Title Effect */
+        .title-effect-wrapper {
+            perspective: 1000px;
+        }
+        .title-3d-effect {
+            font-weight: 900;
+            color: #f0f2f5;
+            background: linear-gradient(135deg, #84cc16, #39A900, #22c55e);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            transform: rotateX(15deg) rotateY(-5deg);
+            text-shadow: 
+                1px 1px 0px #205c00,
+                2px 2px 0px #205c00,
+                3px 3px 0px #1b4d00,
+                4px 4px 0px #1b4d00,
+                5px 5px 0px #153d00,
+                6px 6px 0px #153d00,
+                7px 7px 15px rgba(0,0,0,0.5);
+            transition: transform 0.3s ease, text-shadow 0.3s ease;
+        }
+        .title-3d-effect:hover {
+            transform: rotateX(0deg) rotateY(0deg);
+             text-shadow: 
+                1px -1px 0px #205c00,
+                2px -2px 0px #1b4d00,
+                3px -3px 0px #153d00,
+                4px -4px 10px rgba(0,0,0,0.4);
+        }
+
+        .step-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .admin-sidebar a.active {
+            background-color: var(--sena-green-light);
+            color: white;
+            font-weight: 600;
+        }
+        .admin-sidebar a:hover:not(.active) {
+            background-color: #e8f5e9;
+            color: var(--sena-green-dark);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <!-- Loading Spinner -->
+    <div id="loading-overlay" class="fixed inset-0 bg-white/80 z-[100] flex items-center justify-center">
+        <div class="flex flex-col items-center">
+            <svg class="animate-spin h-10 w-10 text-[var(--sena-green-light)]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p class="mt-4 text-lg font-semibold text-[var(--sena-green-dark)]">Cargando Plataforma...</p>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div id="app-container" class="hidden">
+
+        <!-- Public Pages Container -->
+        <div id="public-pages">
+            <!-- Header -->
+            <header id="main-header" class="header fixed top-0 left-0 right-0 z-50">
+                <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                    <div class="flex items-center justify-between h-20">
+                        <div class="flex items-center space-x-4">
+                            <img id="header-logo" src="https://placehold.co/150x50/00324D/FFFFFF?text=SENA" alt="Logo SENA" class="h-10">
+                            <span class="text-2xl font-bold text-[var(--sena-green-dark)]">Certificatones</span>
+                        </div>
+                        <nav class="hidden md:flex items-center space-x-8">
+                            <a href="#" class="text-gray-600 hover:text-[var(--sena-green-light)] font-medium transition-colors nav-link" data-page="home">Inicio</a>
+                            <a href="#" class="text-gray-600 hover:text-[var(--sena-green-light)] font-medium transition-colors nav-link" data-page="categories-public">Categorías</a>
+                            <a href="#" class="text-gray-600 hover:text-[var(--sena-green-light)] font-medium transition-colors nav-link" data-page="news-public">Noticias</a>
+                        </nav>
+                        <div class="flex items-center space-x-4">
+                            <button id="admin-panel-btn" class="bg-[var(--sena-orange)] text-white font-bold py-2 px-6 rounded-full hover:bg-opacity-90 transition-all shadow-lg">
+                                Panel Admin
+                            </button>
+                            <button id="mobile-menu-btn" class="md:hidden p-2 rounded-md text-gray-600 hover:bg-gray-200">
+                                <svg id="menu-open-icon" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg>
+                                <svg id="menu-close-icon" class="h-6 w-6 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <!-- Mobile Menu -->
+                <div id="mobile-menu" class="hidden md:hidden bg-white border-t border-gray-200">
+                    <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                         <a href="#" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-white hover:bg-[var(--sena-green-light)] nav-link" data-page="home">Inicio</a>
+                         <a href="#" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-white hover:bg-[var(--sena-green-light)] nav-link" data-page="categories-public">Categorías</a>
+                         <a href="#" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-white hover:bg-[var(--sena-green-light)] nav-link" data-page="news-public">Noticias</a>
+                    </div>
+                </div>
+            </header>
+            
+            <!-- NEW: Disclaimer Banner -->
+            <div id="disclaimer-banner" class="bg-yellow-300 text-yellow-900 text-center p-3 text-sm font-semibold mt-20">
+                <div class="container mx-auto flex items-center justify-center gap-3">
+                    <i data-lucide="alert-triangle" class="h-5 w-5"></i>
+                    <span>Este sitio es una demostración técnica para un portafolio y no representa una plataforma oficial del SENA.</span>
+                </div>
+            </div>
+
+            <main id="page-content">
+                <!-- Home Page -->
+                <div id="home-page" class="page">
+                    <!-- Hero Section -->
+                    <section class="relative h-[60vh] md:h-[80vh] flex items-center justify-center text-center text-white bg-gray-800">
+                        <div class="absolute inset-0 bg-cover bg-center" style="background-image: url('https://images.unsplash.com/photo-1557804506-669a67965ba0?q=80&w=2940&auto=format&fit=crop');"></div>
+                        <div class="absolute inset-0 bg-black opacity-60"></div>
+                        <div class="aurora-background"></div>
+                        <div class="relative z-10 p-4">
+                            <!-- UPDATED: 3D Title -->
+                            <div class="title-effect-wrapper">
+                                <h1 id="hero-title" class="title-3d-effect text-4xl md:text-6xl lg:text-7xl tracking-tight">
+                                    Convocatoria a Certificatón SENA
+                                </h1>
+                            </div>
+                            <p id="hero-subtitle" class="mt-8 max-w-3xl mx-auto text-lg md:text-xl text-gray-200">Valida tu experiencia, impulsa tu futuro. Certifica tus competencias laborales con el SENA y abre un mundo de oportunidades.</p>
+                        </div>
+                    </section>
+
+                    <!-- What is Certificaton? -->
+                    <section class="py-16 sm:py-24 bg-white">
+                        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                            <div class="text-center mb-12">
+                                <h2 id="about-title" class="text-3xl md:text-4xl font-bold text-[var(--sena-green-dark)]">¿Qué es Certificatón?</h2>
+                                <p id="about-text" class="mt-4 max-w-3xl mx-auto text-lg text-gray-600">Es una estrategia nacional del SENA para reconocer formalmente los conocimientos, destrezas y habilidades que has adquirido a lo largo de tu vida laboral, sin importar si tienes un título formal.</p>
+                            </div>
+                            <div class="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+                                <div class="bg-gray-50 p-8 rounded-xl shadow-md border border-gray-200">
+                                    <h3 id="mission-title" class="text-2xl font-semibold text-[var(--sena-green-dark)] mb-3">Misión</h3>
+                                    <p id="mission-text" class="text-gray-600">Facilitar el acceso a la certificación de competencias laborales para todos los colombianos, promoviendo la equidad, la inclusión y el mejoramiento de la empleabilidad y la calidad de vida.</p>
+                                </div>
+                                <div class="bg-gray-50 p-8 rounded-xl shadow-md border border-gray-200">
+                                    <h3 id="vision-title" class="text-2xl font-semibold text-[var(--sena-green-dark)] mb-3">Visión</h3>
+                                    <p id="vision-text" class="text-gray-600">Ser el referente nacional e internacional en la evaluación y certificación de competencias laborales, contribuyendo al desarrollo del talento humano y a la competitividad del país.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                    
+                    <!-- Path to Certification -->
+                    <section class="py-16 sm:py-24 bg-gray-50">
+                        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                            <div class="text-center mb-12">
+                                <h2 id="process-title" class="text-3xl md:text-4xl font-bold text-[var(--sena-green-dark)]">Un Camino hacia la Certificación</h2>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                                <div class="step-card text-center p-6 bg-white rounded-xl shadow-lg border border-transparent hover:border-[var(--sena-green-light)]">
+                                    <div class="flex items-center justify-center h-16 w-16 rounded-full bg-[var(--sena-green-light)] text-white mx-auto mb-4"><i data-lucide="search" class="h-8 w-8"></i></div>
+                                    <h3 class="text-xl font-semibold text-[var(--sena-green-dark)] mb-2">1. Explora</h3>
+                                    <p class="text-gray-600">Navega por las categorías y encuentra la norma de competencia que se ajusta a tu perfil y experiencia.</p>
+                                </div>
+                                <div class="step-card text-center p-6 bg-white rounded-xl shadow-lg border border-transparent hover:border-[var(--sena-green-light)]">
+                                    <div class="flex items-center justify-center h-16 w-16 rounded-full bg-[var(--sena-green-light)] text-white mx-auto mb-4"><i data-lucide="edit-3" class="h-8 w-8"></i></div>
+                                    <h3 class="text-xl font-semibold text-[var(--sena-green-dark)] mb-2">2. Inscríbete</h3>
+                                    <p class="text-gray-600">Completa el formulario de inscripción con tus datos. Es un proceso fácil, rápido y seguro.</p>
+                                </div>
+                                <div class="step-card text-center p-6 bg-white rounded-xl shadow-lg border border-transparent hover:border-[var(--sena-green-light)]">
+                                    <div class="flex items-center justify-center h-16 w-16 rounded-full bg-[var(--sena-green-light)] text-white mx-auto mb-4"><i data-lucide="check-circle" class="h-8 w-8"></i></div>
+                                    <h3 class="text-xl font-semibold text-[var(--sena-green-dark)] mb-2">3. Valida</h3>
+                                    <p class="text-gray-600">Demuestra tus conocimientos y habilidades a través de las pruebas de evaluación diseñadas por expertos.</p>
+                                </div>
+                                <div class="step-card text-center p-6 bg-white rounded-xl shadow-lg border border-transparent hover:border-[var(--sena-green-light)]">
+                                    <div class="flex items-center justify-center h-16 w-16 rounded-full bg-[var(--sena-green-light)] text-white mx-auto mb-4"><i data-lucide="award" class="h-8 w-8"></i></div>
+                                    <h3 class="text-xl font-semibold text-[var(--sena-green-dark)] mb-2">4. Recibe tu Certificado</h3>
+                                    <p class="text-gray-600">Al superar el proceso, obtendrás un certificado del SENA que respalda tu competencia a nivel nacional.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Main Categories -->
+                    <section class="py-16 sm:py-24 bg-white">
+                        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                            <div class="text-center mb-12">
+                                <h2 id="categories-title" class="text-3xl md:text-4xl font-bold text-[var(--sena-green-dark)]">Categorías Principales</h2>
+                            </div>
+                            <div id="main-categories-container" class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                <div class="text-center p-4">Cargando categorías...</div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- News & Updates -->
+                    <section class="py-16 sm:py-24 bg-gray-50">
+                        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                            <div class="text-center mb-12">
+                                <h2 id="news-title" class="text-3xl md:text-4xl font-bold text-[var(--sena-green-dark)]">Noticias y Actualidad</h2>
+                            </div>
+                            <div id="news-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                <div class="text-center p-4">Cargando noticias...</div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Success Stories -->
+                    <section class="py-16 sm:py-24 bg-white">
+                        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                            <div class="text-center mb-12">
+                                <h2 id="stories-title" class="text-3xl md:text-4xl font-bold text-[var(--sena-green-dark)]">Historias de Éxito</h2>
+                            </div>
+                            <div id="stories-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                <div class="text-center p-4">Cargando historias...</div>
+                            </div>
+                        </div>
+                    </section>
+                    
+                    <!-- NEW: Public Reports Section -->
+                    <section id="public-reports-section" class="py-16 sm:py-24 bg-gray-50">
+                        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                            <div class="text-center mb-6">
+                                <h2 class="text-3xl md:text-4xl font-bold text-[var(--sena-green-dark)]">Reporte de Inscripciones en Tiempo Real</h2>
+                                <div class="mt-4 max-w-3xl mx-auto bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 rounded-r-lg" role="alert">
+                                    <p class="font-bold">Nota de Demostración</p>
+                                    <p>Esta tabla de reportes normalmente reside en el panel de administrador. Se ha expuesto aquí con fines visuales para demostrar la reactividad de la plataforma.</p>
+                                </div>
+                            </div>
+                            <!-- Filters -->
+                             <div class="bg-white p-4 rounded-lg shadow mb-6">
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    <input type="text" id="public-report-filter-name" placeholder="Filtrar por nombre..." class="p-2 border rounded-md">
+                                    <select id="public-report-filter-norm" class="p-2 border rounded-md"><option value="">Filtrar por norma...</option></select>
+                                    <select id="public-report-filter-center" class="p-2 border rounded-md"><option value="">Filtrar por centro...</option></select>
+                                    <button id="public-apply-report-filters" class="bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700">Aplicar Filtros</button>
+                                </div>
+                             </div>
+                             <!-- Table -->
+                             <div class="bg-white rounded-lg shadow overflow-x-auto">
+                                <table class="w-full text-sm text-left text-gray-500">
+                                    <thead class="text-xs text-gray-700 uppercase bg-gray-100">
+                                        <tr>
+                                            <th class="px-6 py-3">Nombre</th>
+                                            <th class="px-6 py-3">Documento</th>
+                                            <th class="px-6 py-3">Norma</th>
+                                            <th class="px-6 py-3">Centro Asignado</th>
+                                            <th class="px-6 py-3">Estado</th>
+                                            <th class="px-6 py-3">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="public-reports-table-body">
+                                        <!-- Data will be loaded here -->
+                                    </tbody>
+                                </table>
+                             </div>
+                        </div>
+                    </section>
+
+                </div>
+
+                <!-- Norms Page -->
+                <div id="norms-page" class="page hidden min-h-screen bg-gray-100 py-12">
+                    <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                        <button class="back-to-home mb-8 inline-flex items-center gap-2 text-[var(--sena-orange)] font-semibold hover:underline">
+                            <i data-lucide="arrow-left"></i> Volver al Inicio
+                        </button>
+                        <h2 id="norms-category-title" class="text-3xl md:text-4xl font-bold text-[var(--sena-green-dark)] mb-8">Normas de Competencia</h2>
+                        <div id="norms-list" class="space-y-6">
+                           <div class="text-center p-4">Cargando normas...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Registration Form Page -->
+                <div id="registration-page" class="page hidden min-h-screen bg-gray-100 py-12">
+                    <div class="container mx-auto px-4 sm:px-6 lg:px-8 max-w-4xl">
+                         <button class="back-to-norms mb-8 inline-flex items-center gap-2 text-[var(--sena-orange)] font-semibold hover:underline">
+                            <i data-lucide="arrow-left"></i> Volver a las Normas
+                        </button>
+                        <div class="bg-white p-8 rounded-xl shadow-lg">
+                            <h2 class="text-2xl md:text-3xl font-bold text-[var(--sena-green-dark)] mb-2">Formulario de Inscripción</h2>
+                            <p class="text-gray-600 mb-1">Norma: <strong id="form-norma-name" class="text-[var(--sena-green-dark)]"></strong></p>
+                            <p class="text-gray-600 mb-6">Centro Asignado: <strong id="form-assigned-center" class="text-[var(--sena-orange)]">Procesando...</strong></p>
+                            
+                            <form id="registration-form" class="space-y-6">
+                                <input type="hidden" id="form-norma-id">
+                                <input type="hidden" id="form-assigned-center-id">
+                                <div class="border-b border-gray-200 pb-6">
+                                    <h3 class="text-lg font-semibold text-gray-800 mb-4">1. Información Personal</h3>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <input type="text" placeholder="Nombres" class="w-full p-3 border rounded-md" required>
+                                        <input type="text" placeholder="Apellidos" class="w-full p-3 border rounded-md" required>
+                                        <input type="email" placeholder="Correo Electrónico" class="w-full p-3 border rounded-md" required>
+                                        <select class="w-full p-3 border rounded-md" required>
+                                            <option value="">Tipo de Documento</option>
+                                            <option>Cédula de Ciudadanía</option>
+                                            <option>Cédula de Extranjería</option>
+                                            <option>Pasaporte</option>
+                                        </select>
+                                        <input type="text" placeholder="Número de Documento" class="w-full p-3 border rounded-md" required>
+                                        <input type="text" onfocus="(this.type='date')" onblur="(this.type='text')" placeholder="Fecha de Nacimiento" class="w-full p-3 border rounded-md" required>
+                                        <select id="form-gender" class="w-full p-3 border rounded-md" required>
+                                            <option value="">Género</option>
+                                            <option>Masculino</option>
+                                            <option>Femenino</option>
+                                            <option>Otro</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="border-b border-gray-200 pb-6">
+                                    <h3 class="text-lg font-semibold text-gray-800 mb-4">2. Información Demográfica</h3>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <select id="form-country" class="w-full p-3 border rounded-md" required><option value="Colombia">Colombia</option></select>
+                                        <select id="form-department" class="w-full p-3 border rounded-md" required><option value="">Departamento de Residencia</option></select>
+                                        <select id="form-municipality" class="w-full p-3 border rounded-md" required><option value="">Municipio de Residencia</option></select>
+                                        <input type="text" placeholder="Dirección de Residencia" class="w-full p-3 border rounded-md" required>
+                                    </div>
+                                </div>
+                                <div class="border-b border-gray-200 pb-6">
+                                    <h3 class="text-lg font-semibold text-gray-800 mb-4">3. Información Académica y Laboral</h3>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <select class="w-full p-3 border rounded-md" required>
+                                            <option value="">Nivel de Estudios</option>
+                                            <option>Primaria</option><option>Bachillerato</option><option>Técnico</option><option>Tecnólogo</option><option>Profesional</option><option>Postgrado</option>
+                                        </select>
+                                        <select class="w-full p-3 border rounded-md" required>
+                                            <option value="">Condición Laboral</option>
+                                            <option>Empleado</option><option>Independiente</option><option>Desempleado</option><option>Estudiante</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h3 class="text-lg font-semibold text-gray-800 mb-4">4. Acuerdos y Consentimiento</h3>
+                                    <div class="space-y-4">
+                                        <label class="flex items-start">
+                                            <input type="checkbox" class="mt-1 h-5 w-5 text-[var(--sena-green-light)] border-gray-300 rounded focus:ring-[var(--sena-orange)]" required>
+                                            <span class="ml-3 text-gray-700">Autorizo el tratamiento de mis datos personales de acuerdo con la Ley 1581 de 2012 y la política de tratamiento de datos del SENA.</span>
+                                        </label>
+                                         <label class="flex items-start">
+                                            <input type="checkbox" class="mt-1 h-5 w-5 text-[var(--sena-green-light)] border-gray-300 rounded focus:ring-[var(--sena-orange)]" required>
+                                            <span class="ml-3 text-gray-700">Declaro que la información proporcionada es veraz y que cumplo con los requisitos para aplicar a esta norma de competencia.</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="pt-6">
+                                    <button type="submit" class="w-full bg-[var(--sena-green-light)] text-white font-bold py-4 px-6 rounded-lg hover:bg-opacity-90 transition-all shadow-lg text-lg">Enviar Inscripción</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Success Page -->
+                 <div id="success-page" class="page hidden min-h-screen bg-gray-100 flex items-center justify-center">
+                    <div class="text-center bg-white p-12 rounded-xl shadow-2xl max-w-2xl mx-auto">
+                        <div class="flex items-center justify-center h-20 w-20 rounded-full bg-green-100 text-green-600 mx-auto mb-6">
+                            <i data-lucide="party-popper" class="h-12 w-12"></i>
+                        </div>
+                        <h2 class="text-3xl font-bold text-[var(--sena-green-dark)] mb-4">¡Inscripción Exitosa!</h2>
+                        <p class="text-lg text-gray-600 mb-2">Tu solicitud ha sido recibida correctamente.</p>
+                        <p class="text-gray-600 mb-6">Hemos asignado tu postulación al centro: <strong id="success-center-name" class="text-[var(--sena-orange)]"></strong>. Pronto se pondrán en contacto contigo para continuar con el proceso.</p>
+                        <button class="back-to-home bg-[var(--sena-green-light)] text-white font-bold py-3 px-8 rounded-full hover:bg-opacity-90 transition-all shadow-lg">Volver al Inicio</button>
+                    </div>
+                </div>
+
+            </main>
+
+            <!-- Footer -->
+            <footer class="bg-[var(--sena-green-dark)] text-white">
+                <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                        <div class="space-y-4">
+                            <div class="flex items-center space-x-3"><img id="footer-logo" src="https://placehold.co/150x50/FFFFFF/00324D?text=SENA" alt="Logo SENA Blanco" class="h-10"></div>
+                            <p id="footer-address"><strong>Dirección:</strong> Calle 57 No. 8 - 69, Bogotá D.C.</p>
+                            <p id="footer-whatsapp"><strong>WhatsApp:</strong> 3168760255</p>
+                            <p id="footer-phone"><strong>Teléfonos:</strong> (601) 3430111 / 018000 910270</p>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold mb-4">Enlaces de Interés</h3>
+                            <ul class="space-y-2">
+                                <li><a href="#" class="hover:text-[var(--sena-green-light)] transition-colors">Portal SOFIA Plus</a></li>
+                                <li><a href="#" class="hover:text-[var(--sena-green-light)] transition-colors">Agencia Pública de Empleo</a></li>
+                                <li><a href="#" class="hover:text-[var(--sena-green-light)] transition-colors">Atención al Ciudadano</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="mt-12 pt-8 border-t border-gray-700 text-center text-gray-400 text-sm">
+                        <p id="footer-copyright">© 2025 SENA. Todos los derechos reservados.</p>
+                        <p id="footer-dev">Desarrollado y asegurado por Ingeniero Camilo Andrés Serrano Sánchez.</p>
+                    </div>
+                </div>
+            </footer>
+        </div>
+
+        <!-- Admin Panel Container -->
+        <div id="admin-panel" class="hidden">
+            <!-- Admin Login -->
+            <div id="admin-login-overlay" class="fixed inset-0 bg-gray-800 bg-opacity-75 z-50 flex items-center justify-center">
+                <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-sm">
+                    <h2 class="text-2xl font-bold text-center text-[var(--sena-green-dark)] mb-6">Acceso Administrador</h2>
+                    <form id="admin-login-form">
+                        <input type="password" id="admin-password" placeholder="Contraseña de Administrador" class="w-full p-3 border rounded-md mb-4" required>
+                        <button type="submit" class="w-full bg-[var(--sena-orange)] text-white font-bold py-3 rounded-md hover:bg-opacity-90">Ingresar</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Main Admin Interface -->
+            <div id="admin-interface" class="hidden flex min-h-screen bg-gray-100">
+                <!-- Sidebar -->
+                <aside class="w-64 bg-white shadow-md flex-shrink-0 flex flex-col">
+                    <div class="p-4 border-b flex items-center space-x-3">
+                        <img src="https://placehold.co/40x40/00324D/FFFFFF?text=S" alt="Admin" class="h-10 w-10 rounded-full">
+                        <div>
+                            <p class="font-bold text-[var(--sena-green-dark)]">Panel Admin</p>
+                            <p class="text-sm text-gray-500">Certificatones</p>
+                        </div>
+                    </div>
+                    <nav class="flex-grow p-4 space-y-2 admin-sidebar">
+                        <a href="#" class="admin-nav-link flex items-center gap-3 px-4 py-2 rounded-md text-gray-700" data-section="dashboard"><i data-lucide="layout-dashboard" class="h-5 w-5"></i> Tablero</a>
+                        <a href="#" class="admin-nav-link flex items-center gap-3 px-4 py-2 rounded-md text-gray-700" data-section="reports"><i data-lucide="file-text" class="h-5 w-5"></i> Generador de Reportes</a>
+                        <a href="#" class="admin-nav-link flex items-center gap-3 px-4 py-2 rounded-md text-gray-700" data-section="dynamizers"><i data-lucide="users" class="h-5 w-5"></i> Gestión Dinamizadores</a>
+                        <div id="dev-zone-link-container" class="pt-4 border-t mt-4">
+                             <a href="#" id="dev-zone-link" class="admin-nav-link flex items-center gap-3 px-4 py-2 rounded-md text-gray-700 bg-yellow-100 hover:bg-yellow-200" data-section="dev-zone">
+                                <i data-lucide="shield-alert" class="h-5 w-5 text-yellow-600"></i> Zona Desarrollador
+                            </a>
+                        </div>
+                    </nav>
+                    <div class="p-4 border-t space-y-2">
+                        <button id="dev-logout-btn" class="hidden w-full text-left flex items-center gap-3 px-4 py-2 rounded-md text-sm text-yellow-800 bg-yellow-100 hover:bg-yellow-200">
+                            <i data-lucide="log-out" class="h-4 w-4"></i> Cerrar Sesión Dev
+                        </button>
+                        <button id="admin-logout-btn" class="w-full text-left flex items-center gap-3 px-4 py-2 rounded-md text-sm text-red-700 bg-red-100 hover:bg-red-200">
+                            <i data-lucide="log-out" class="h-4 w-4"></i> Cerrar Sesión Admin
+                        </button>
+                    </div>
+                </aside>
+
+                <!-- Admin Content -->
+                <main class="flex-1 p-6 sm:p-8 lg:p-10">
+                    <div id="admin-content">
+                        <!-- Dashboard Section -->
+                        <section id="admin-dashboard" class="admin-section">
+                            <h1 class="text-3xl font-bold text-gray-800 mb-6">Tablero de Gráficas</h1>
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                                <div class="bg-white p-6 rounded-lg shadow"><h3 class="text-gray-500">Inscripciones Totales</h3><p id="stats-total" class="text-3xl font-bold">0</p></div>
+                                <div class="bg-white p-6 rounded-lg shadow"><h3 class="text-gray-500">Categoría más Popular</h3><p id="stats-top-category" class="text-xl font-bold">-</p></div>
+                                <div class="bg-white p-6 rounded-lg shadow"><h3 class="text-gray-500">Centro con más Asignados</h3><p id="stats-top-center" class="text-xl font-bold">-</p></div>
+                                <div class="bg-white p-6 rounded-lg shadow"><h3 class="text-gray-500">Cupos Disponibles</h3><p id="stats-total-slots" class="text-3xl font-bold">0</p></div>
+                            </div>
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <div class="bg-white p-6 rounded-lg shadow"><h3 class="font-semibold mb-4">Inscripciones por Categoría</h3><canvas id="category-chart"></canvas></div>
+                                <div class="bg-white p-6 rounded-lg shadow"><h3 class="font-semibold mb-4">Asignaciones por Centro</h3><canvas id="center-chart"></canvas></div>
+                            </div>
+                            <div class="mt-6 bg-white p-6 rounded-lg shadow">
+                                <h3 class="font-semibold mb-2">Análisis Inteligente</h3>
+                                <p class="text-gray-600 mb-4">Obtén insights y recomendaciones basadas en los datos actuales de inscripción.</p>
+                                <button id="generate-ai-analysis-btn" class="bg-[var(--sena-orange)] text-white font-bold py-2 px-5 rounded-md hover:bg-opacity-90 flex items-center gap-2"><i data-lucide="sparkles"></i> Generar Análisis con IA</button>
+                                <div id="ai-analysis-result" class="mt-4 p-4 bg-gray-50 rounded-md border hidden"></div>
+                            </div>
+                        </section>
+
+                        <!-- Reports Section -->
+                        <section id="admin-reports" class="admin-section hidden">
+                             <h1 class="text-3xl font-bold text-gray-800 mb-2">Generador de Reportes</h1>
+                             <p class="text-gray-600 mb-6">Filtra, visualiza, edita y exporta todas las inscripciones registradas en la plataforma.</p>
+                             <div class="bg-white p-4 rounded-lg shadow mb-6">
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    <input type="text" id="report-filter-name" placeholder="Filtrar por nombre..." class="p-2 border rounded-md">
+                                    <select id="report-filter-norm" class="p-2 border rounded-md"><option value="">Filtrar por norma...</option></select>
+                                    <select id="report-filter-center" class="p-2 border rounded-md"><option value="">Filtrar por centro...</option></select>
+                                    <button id="apply-report-filters" class="bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700">Aplicar Filtros</button>
+                                </div>
+                             </div>
+                             <div class="flex justify-end gap-4 mb-4">
+                                <button id="export-csv-btn" class="bg-green-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-green-700 flex items-center gap-2"><i data-lucide="file-spreadsheet"></i> Exportar a CSV</button>
+                                <button id="export-json-btn" class="bg-yellow-500 text-white font-semibold py-2 px-4 rounded-md hover:bg-yellow-600 flex items-center gap-2"><i data-lucide="braces"></i> Exportar a JSON</button>
+                             </div>
+                             <div class="bg-white rounded-lg shadow overflow-x-auto">
+                                <table class="w-full text-sm text-left text-gray-500">
+                                    <thead class="text-xs text-gray-700 uppercase bg-gray-100">
+                                        <tr>
+                                            <th class="px-6 py-3">Nombre</th><th class="px-6 py-3">Documento</th><th class="px-6 py-3">Norma</th><th class="px-6 py-3">Centro Asignado</th><th class="px-6 py-3">Estado</th><th class="px-6 py-3">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="reports-table-body"></tbody>
+                                </table>
+                             </div>
+                        </section>
+
+                        <!-- Dynamizers Section -->
+                        <section id="admin-dynamizers" class="admin-section hidden">
+                            <h1 class="text-3xl font-bold text-gray-800 mb-2">Gestión de Dinamizadores</h1>
+                            <p class="text-gray-600 mb-6">Esta es la zona de acceso para que los gestores de centros de formación puedan ver sus aspirantes.</p>
+                            <div class="bg-white p-8 rounded-lg shadow max-w-md mx-auto">
+                                <h2 class="text-xl font-bold text-center text-[var(--sena-green-dark)] mb-6">Acceso Dinamizador</h2>
+                                <form id="dynamizer-login-form">
+                                    <select id="dynamizer-center-select" class="w-full p-3 border rounded-md mb-4" required><option value="">Selecciona tu Centro de Formación</option></select>
+                                    <button type="submit" class="w-full bg-[var(--sena-green-light)] text-white font-bold py-3 rounded-md hover:bg-opacity-90">Ingresar al Panel</button>
+                                </form>
+                            </div>
+                            <div id="dynamizer-panel" class="hidden mt-8">
+                                <div class="flex justify-between items-center mb-6">
+                                    <h2 class="text-2xl font-bold">Panel de: <span id="dynamizer-panel-center-name" class="text-[var(--sena-orange)]"></span></h2>
+                                    <button id="dynamizer-logout-btn" class="text-red-600 hover:underline font-semibold">Cerrar Sesión</button>
+                                </div>
+                                <div class="bg-white rounded-lg shadow overflow-x-auto">
+                                    <table class="w-full text-sm text-left text-gray-500">
+                                        <thead class="text-xs text-gray-700 uppercase bg-gray-100">
+                                            <tr>
+                                                <th class="px-6 py-3">Aspirante</th><th class="px-6 py-3">Contacto</th><th class="px-6 py-3">Norma</th><th class="px-6 py-3">Estado Actual</th><th class="px-6 py-3">Observaciones</th><th class="px-6 py-3">Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="dynamizer-table-body"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- Developer Zone -->
+                        <section id="admin-dev-zone" class="admin-section hidden">
+                            <div id="dev-login-overlay" class="absolute inset-0 bg-gray-100 bg-opacity-95 z-10 flex items-center justify-center">
+                                <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-sm text-center">
+                                    <i data-lucide="code-2" class="h-12 w-12 mx-auto text-yellow-500 mb-4"></i>
+                                    <h2 class="text-2xl font-bold text-center text-[var(--sena-green-dark)] mb-6">Zona de Desarrolladores</h2>
+                                    <form id="dev-login-form">
+                                        <input type="password" id="dev-password" placeholder="Contraseña de Desarrollador" class="w-full p-3 border rounded-md mb-4" required>
+                                        <button type="submit" class="w-full bg-yellow-500 text-white font-bold py-3 rounded-md hover:bg-yellow-600">Desbloquear</button>
+                                    </form>
+                                </div>
+                            </div>
+                            <div id="dev-content" class="hidden">
+                                <h1 class="text-3xl font-bold text-gray-800 mb-6">Gestión Avanzada</h1>
+                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                    <div class="space-y-8">
+                                        <div class="bg-white p-6 rounded-lg shadow">
+                                            <h3 class="text-xl font-bold mb-4">Gestión de Centros</h3>
+                                            <form id="center-form" class="space-y-3 mb-4">
+                                                <input type="hidden" id="center-id">
+                                                <input type="text" id="center-name" placeholder="Nombre del Centro" class="w-full p-2 border rounded-md" required>
+                                                <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-md">Guardar Centro</button>
+                                            </form>
+                                            <div id="centers-list" class="space-y-2 max-h-60 overflow-y-auto"></div>
+                                        </div>
+                                        <div class="bg-white p-6 rounded-lg shadow">
+                                            <h3 class="text-xl font-bold mb-4">Gestión de Categorías y Normas</h3>
+                                            <p class="text-gray-600 mb-4">Selecciona una categoría para ver y gestionar sus normas.</p>
+                                            <div id="category-norm-management" class="space-y-4"></div>
+                                        </div>
+                                        <div class="bg-white p-6 rounded-lg shadow">
+                                            <h3 class="text-xl font-bold mb-4">Gestión de Noticias</h3>
+                                            <button id="add-news-btn" class="bg-blue-600 text-white px-4 py-2 rounded-md mb-4">Agregar Noticia</button>
+                                            <div id="news-management-list" class="space-y-2 max-h-60 overflow-y-auto"></div>
+                                        </div>
+                                        <div class="bg-white p-6 rounded-lg shadow">
+                                            <h3 class="text-xl font-bold mb-4">Gestión de Historias de Éxito</h3>
+                                            <button id="add-story-btn" class="bg-blue-600 text-white px-4 py-2 rounded-md mb-4">Agregar Historia</button>
+                                            <div id="stories-management-list" class="space-y-2 max-h-60 overflow-y-auto"></div>
+                                        </div>
+                                    </div>
+                                    <div class="space-y-8">
+                                        <div class="bg-white p-6 rounded-lg shadow">
+                                            <h3 class="text-xl font-bold mb-4">Configuración del Sitio</h3>
+                                            <form id="site-config-form" class="space-y-4">
+                                                <button type="submit" class="bg-[var(--sena-orange)] text-white font-bold px-5 py-2 rounded-md">Guardar Configuración</button>
+                                            </form>
+                                        </div>
+                                        <div class="bg-white p-6 rounded-lg shadow">
+                                            <h3 class="text-xl font-bold mb-4">Seguridad del Panel</h3>
+                                            <form id="security-form" class="space-y-4">
+                                                <input type="password" id="new-admin-password" placeholder="Nueva Contraseña Admin" class="w-full p-2 border rounded-md">
+                                                <input type="password" id="new-dev-password" placeholder="Nueva Contraseña Dev" class="w-full p-2 border rounded-md">
+                                                <button type="submit" class="bg-red-600 text-white px-4 py-2 rounded-md">Actualizar Contraseñas</button>
+                                            </form>
+                                        </div>
+                                        <div class="bg-white p-6 rounded-lg shadow">
+                                            <h3 class="text-xl font-bold mb-4">Descargar Código Fuente</h3>
+                                            <div class="flex gap-4">
+                                                <button id="download-json-btn" class="bg-gray-700 text-white px-4 py-2 rounded-md">Descargar JSON</button>
+                                                <button id="download-text-btn" class="bg-gray-700 text-white px-4 py-2 rounded-md">Descargar Texto Plano</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </main>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        const {
+            initializeApp, getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken,
+            getFirestore, doc, getDoc, setDoc, onSnapshot, collection, addDoc, getDocs, updateDoc, deleteDoc, query, where, writeBatch,
+            firebaseConfig, appId
+        } = window.firebaseContext;
+
+        const showLoading = (show) => {
+            document.getElementById('loading-overlay').style.display = show ? 'flex' : 'none';
+            document.getElementById('app-container').style.display = show ? 'none' : 'block';
+        };
+
+        const showAlert = (title, text, icon = 'success') => {
+            Swal.fire({ title, text, icon, confirmButtonColor: 'var(--sena-orange)' });
+        };
+
+        let db, auth, userId;
+        let siteConfig = {};
+        let appData = { categories: [], news: [], stories: [], centers: [], applications: [], norms: [] };
+        let unsubscribeListeners = [];
+
+        async function initializeFirebase() {
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        console.log("Authenticated user:", userId);
+                        if (unsubscribeListeners.length === 0) { 
+                            await setupDataListeners();
+                        }
+                    } else {
+                        console.log("User is signed out or not yet authenticated.");
+                        unsubscribeListeners.forEach(unsub => unsub());
+                        unsubscribeListeners = [];
+                    }
+                });
+
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+            } catch (error) {
+                console.error("Firebase Initialization Error:", error);
+                showAlert('Error de Conexión', 'No se pudo conectar con la base de datos. Por favor, recarga la página.', 'error');
+                showLoading(false);
+            }
+        }
+
+        async function setupDataListeners() {
+            unsubscribeListeners.forEach(unsub => unsub());
+            unsubscribeListeners = [];
+
+            const collectionsToWatch = {
+                config: 'config', categories: 'categories', news: 'news', stories: 'successStories',
+                centers: 'centers', applications: 'applications', norms: 'standards'
+            };
+
+            const configRef = doc(db, `artifacts/${appId}/public/data/config/main`);
+            const unsubConfig = onSnapshot(configRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    siteConfig = docSnap.data();
+                    console.log("Site config loaded.");
+                    updatePublicUI();
+                    if(isDevLoggedIn) updateAdminUI();
+                } else {
+                    console.log("No config found. Initializing with defaults.");
+                    initializeAppDefaults();
+                }
+                showLoading(false);
+            }, (error) => {
+                console.error("Error fetching config:", error);
+                showLoading(false);
+            });
+            unsubscribeListeners.push(unsubConfig);
+
+            for (const key in collectionsToWatch) {
+                if (key === 'config') continue;
+                const collRef = collection(db, `artifacts/${appId}/public/data/${collectionsToWatch[key]}`);
+                const unsub = onSnapshot(collRef, (snapshot) => {
+                    appData[key] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    console.log(`Loaded ${key}:`, appData[key].length);
+                    if (['categories', 'news', 'stories'].includes(key)) updatePublicUI();
+                    if (key === 'applications' || key === 'centers' || key === 'categories' || key === 'norms') {
+                        updateAdminDashboard();
+                        renderReportsTable(null, 'public-reports-table-body'); // Update public table
+                        renderReportsTable(null, 'reports-table-body'); // Update admin table
+                        populateReportFilters();
+                    }
+                    if (key === 'centers') updateDynamizerLogin();
+                }, (error) => console.error(`Error fetching ${key}:`, error));
+                unsubscribeListeners.push(unsub);
+            }
+        }
+
+        async function initializeAppDefaults() {
+            const batch = writeBatch(db);
+            
+            const defaultConfig = { adminPass: 'admin', devPass: 'dev', headerLogo: 'https://www.sena.edu.co/Style%20Library/alayout/images/logoSena.png', heroSubtitle: 'Valida tu experiencia, impulsa tu futuro. Certifica tus competencias laborales con el SENA y abre un mundo de oportunidades.', aboutTitle: '¿Qué es Certificatón?', aboutText: 'Es una estrategia nacional del SENA para reconocer formalmente los conocimientos, destrezas y habilidades que has adquirido a lo largo de tu vida laboral, sin importar si tienes un título formal.', missionTitle: 'Misión', missionText: 'Facilitar el acceso a la certificación de competencias laborales para todos los colombianos, promoviendo la equidad, la inclusión y el mejoramiento de la empleabilidad y la calidad de vida.', visionTitle: 'Visión', visionText: 'Ser el referente nacional e internacional en la evaluación y certificación de competencias laborales, contribuyendo al desarrollo del talento humano y a la competitividad del país.', processTitle: 'Un Camino hacia la Certificación', categoriesTitle: 'Categorías Principales', newsTitle: 'Noticias y Actualidad', storiesTitle: 'Historias de Éxito', footerLogo: 'https://www.sena.edu.co/Style%20Library/alayout/images/logoSena.png', footerAddress: '<strong>Dirección:</strong> Calle 57 No. 8 - 69, Bogotá D.C.', footerWhatsapp: '<strong>WhatsApp:</strong> 3168760255', footerPhone: '<strong>Teléfonos:</strong> (601) 3430111 / 018000 910270', footerCopyright: '© 2025 SENA. Todos los derechos reservados.', footerDev: 'Desarrollado y asegurado por Ingeniero Camilo Andrés Serrano Sánchez.' };
+            batch.set(doc(db, `artifacts/${appId}/public/data/config/main`), defaultConfig);
+
+            const categories = [
+                { id: 'cat-nacional', name: 'Nacional', image: 'https://images.unsplash.com/photo-1521791136064-7986c2920216?q=80&w=2938&auto=format&fit=crop' },
+                { id: 'cat-mujeres', name: 'Mujeres', image: 'https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?q=80&w=2787&auto=format&fit=crop' },
+                { id: 'cat-hombres', name: 'Hombres', image: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=2787&auto=format&fit=crop' }
+            ];
+            categories.forEach(cat => batch.set(doc(db, `artifacts/${appId}/public/data/categories`, cat.id), cat));
+
+            const centers = [
+                { id: 'center-antioquia', name: '9501 - 05 - ANTIOQUIA 9501 - COMPLEJO TECNOLÓGICO PARA LA GESTIÓN AGROEMPRESARIAL', slots: {} },
+                { id: 'center-santander', name: '1011 - 68 - SANTANDER 1011 - DIRECCIÓN REGIONAL SANTANDER', slots: {} },
+                { id: 'center-bogota', name: '0001 - 11 - DISTRITO CAPITAL 0001 - REGIONAL DISTRITO CAPITAL', slots: {} }
+            ];
+            
+            const norms = [
+                // Nacional
+                { id: 'norm-n-1', categoryId: 'cat-nacional', name: 'Gestión de Proyectos de Software', description: 'Planificar, ejecutar y controlar proyectos de desarrollo de software aplicando metodologías ágiles.', slots: 20 },
+                { id: 'norm-n-2', categoryId: 'cat-nacional', name: 'Mantenimiento de Vehículos Híbridos', description: 'Diagnosticar y reparar sistemas electrónicos y mecánicos de vehículos con tecnología híbrida.', slots: 15 },
+                { id: 'norm-n-3', categoryId: 'cat-nacional', name: 'Logística y Cadena de Suministro', description: 'Coordinar procesos de almacenamiento, transporte y distribución de mercancías a nivel nacional.', slots: 25 },
+                // Mujeres
+                { id: 'norm-m-1', categoryId: 'cat-mujeres', name: 'Liderazgo y Emprendimiento Digital', description: 'Desarrollar y gestionar emprendimientos basados en tecnologías digitales y liderazgo de equipos.', slots: 30 },
+                { id: 'norm-m-2', categoryId: 'cat-mujeres', name: 'Cuidado Estético de Manos y Pies', description: 'Aplicar técnicas profesionales para el embellecimiento y cuidado de uñas, manos y pies.', slots: 20 },
+                { id: 'norm-m-3', categoryId: 'cat-mujeres', name: 'Confección Industrial de Ropa Exterior', description: 'Operar maquinaria industrial para el ensamble y acabado de prendas de vestir femeninas.', slots: 18 },
+                // Hombres
+                { id: 'norm-h-1', categoryId: 'cat-hombres', name: 'Instalaciones Eléctricas Residenciales', description: 'Montar y mantener redes eléctricas de baja tensión en edificaciones residenciales.', slots: 22 },
+                { id: 'norm-h-2', categoryId: 'cat-hombres', name: 'Soldadura por Arco Eléctrico (SMAW)', description: 'Unir piezas metálicas utilizando el proceso de soldadura manual por arco eléctrico.', slots: 12 },
+                { id: 'norm-h-3', categoryId: 'cat-hombres', name: 'Barbería y Estilismo Masculino', description: 'Realizar cortes de cabello y arreglos de barba y bigote según las tendencias actuales.', slots: 25 }
+            ];
+            norms.forEach(norm => {
+                batch.set(doc(db, `artifacts/${appId}/public/data/standards`, norm.id), { name: norm.name, description: norm.description, categoryId: norm.categoryId });
+                // Distribute slots randomly among centers for this norm
+                centers.forEach(center => {
+                    center.slots[norm.id] = Math.floor(Math.random() * norm.slots/2) + 5; // Assign some slots
+                });
+            });
+            centers.forEach(c => batch.set(doc(db, `artifacts/${appId}/public/data/centers`, c.id), { name: c.name, slots: c.slots }));
+
+            const news = [
+                { title: "SENA abre 5.000 cupos para certificación en TIC", summary: "La nueva convocatoria nacional busca certificar las competencias de los colombianos en áreas de desarrollo de software, ciberseguridad y marketing digital.", image: "https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=2940&auto=format&fit=crop", link: "#" },
+                { title: "Alianza con el sector de la construcción para certificar a 10.000 maestros de obra", summary: "Un nuevo convenio permitirá que miles de trabajadores de la construcción validen su experiencia empírica.", image: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?q=80&w=2940&auto=format&fit=crop", link: "#" },
+                { title: "Mujeres lideran certificaciones en emprendimiento", summary: "Más de 3.000 mujeres han certificado sus competencias para crear y gestionar sus propias empresas en lo que va del año.", image: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=2940&auto=format&fit=crop", link: "#" }
+            ];
+            news.forEach(item => batch.set(doc(collection(db, `artifacts/${appId}/public/data/news`)), item));
+
+            const stories = [
+                { name: "Carlos Rodríguez", testimonial: "Trabajé 15 años en talleres y nunca tuve un título. Gracias a la certificación en Mecánica, ahora soy jefe de taller en una gran empresa.", norm: "Mantenimiento de Vehículos Híbridos", photo: "https://images.unsplash.com/photo-1560250097-0b93528c311a?q=80&w=2787&auto=format&fit=crop" },
+                { name: "Luisa Fernanda Pérez", testimonial: "Siempre me gustó la moda. Certificarme en confección me dio la confianza y las herramientas para lanzar mi propia marca de ropa. ¡Mi sueño hecho realidad!", norm: "Confección Industrial de Ropa Exterior", photo: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=2787&auto=format&fit=crop" },
+                { name: "Javier Mendoza", testimonial: "La certificación en instalaciones eléctricas me abrió las puertas para trabajar en proyectos más grandes y seguros. Mi ingreso se duplicó.", norm: "Instalaciones Eléctricas Residenciales", photo: "https://images.unsplash.com/photo-1557862921-37829c790f19?q=80&w=2942&auto=format&fit=crop" }
+            ];
+            stories.forEach(item => batch.set(doc(collection(db, `artifacts/${appId}/public/data/successStories`)), item));
+
+            await batch.commit();
+            console.log("Default data initialized.");
+        }
+
+        function updatePublicUI() {
+            if (!siteConfig) return;
+            document.getElementById('header-logo').src = siteConfig.headerLogo || '';
+            if(document.getElementById('hero-title')) document.getElementById('hero-title').innerHTML = siteConfig.heroTitle || 'Convocatoria a Certificatón SENA';
+            document.getElementById('hero-subtitle').textContent = siteConfig.heroSubtitle || '';
+            document.getElementById('about-title').textContent = siteConfig.aboutTitle || '';
+            document.getElementById('about-text').textContent = siteConfig.aboutText || '';
+            document.getElementById('mission-title').textContent = siteConfig.missionTitle || '';
+            document.getElementById('mission-text').textContent = siteConfig.missionText || '';
+            document.getElementById('vision-title').textContent = siteConfig.visionTitle || '';
+            document.getElementById('vision-text').textContent = siteConfig.visionText || '';
+            document.getElementById('process-title').textContent = siteConfig.processTitle || '';
+            document.getElementById('categories-title').textContent = siteConfig.categoriesTitle || '';
+            document.getElementById('news-title').textContent = siteConfig.newsTitle || '';
+            document.getElementById('stories-title').textContent = siteConfig.storiesTitle || '';
+            document.getElementById('footer-logo').src = siteConfig.footerLogo || '';
+            document.getElementById('footer-address').innerHTML = siteConfig.footerAddress || '';
+            document.getElementById('footer-whatsapp').innerHTML = siteConfig.footerWhatsapp || '';
+            document.getElementById('footer-phone').innerHTML = siteConfig.footerPhone || '';
+            document.getElementById('footer-copyright').textContent = siteConfig.footerCopyright || '';
+            document.getElementById('footer-dev').textContent = siteConfig.footerDev || '';
+            
+            renderCategories();
+            renderNews();
+            renderSuccessStories();
+            lucide.createIcons();
+        }
+
+        function renderCategories() {
+            const container = document.getElementById('main-categories-container');
+            if (!appData.categories || appData.categories.length === 0) {
+                container.innerHTML = '<p class="text-center col-span-3">No hay categorías disponibles.</p>'; return;
+            }
+            container.innerHTML = appData.categories.map(cat => `
+                <div class="group relative rounded-xl overflow-hidden shadow-lg cursor-pointer" onclick="window.app.navigateToNorms('${cat.id}')">
+                    <img src="${cat.image}" alt="${cat.name}" class="w-full h-80 object-cover transform group-hover:scale-110 transition-transform duration-500">
+                    <div class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center"><h3 class="text-white text-3xl font-bold">${cat.name}</h3></div>
+                </div>`).join('');
+        }
+
+        function renderNews() {
+            const container = document.getElementById('news-container');
+            if (!appData.news || appData.news.length === 0) {
+                container.innerHTML = '<p class="text-center col-span-3">No hay noticias recientes.</p>'; return;
+            }
+            container.innerHTML = appData.news.slice(0, 3).map(item => `
+                <div class="bg-white rounded-xl shadow-md overflow-hidden flex flex-col">
+                    <img src="${item.image}" alt="${item.title}" class="w-full h-48 object-cover">
+                    <div class="p-6 flex-grow flex flex-col">
+                        <h3 class="text-xl font-semibold text-[var(--sena-green-dark)] mb-2">${item.title}</h3>
+                        <p class="text-gray-600 flex-grow">${item.summary}</p>
+                        ${item.link ? `<a href="${item.link}" target="_blank" class="mt-4 text-[var(--sena-orange)] font-semibold hover:underline self-start">Leer más</a>` : ''}
+                    </div>
+                </div>`).join('');
+        }
+
+        function renderSuccessStories() {
+            const container = document.getElementById('stories-container');
+            if (!appData.stories || appData.stories.length === 0) {
+                container.innerHTML = '<p class="text-center col-span-3">No hay historias de éxito para mostrar.</p>'; return;
+            }
+            container.innerHTML = appData.stories.slice(0, 3).map(story => `
+                <div class="bg-white p-8 rounded-xl shadow-lg text-center">
+                    <img src="${story.photo}" alt="${story.name}" class="w-24 h-24 rounded-full mx-auto mb-4 object-cover border-4 border-[var(--sena-green-light)]">
+                    <p class="text-gray-600 italic">"${story.testimonial}"</p>
+                    <h4 class="font-bold text-[var(--sena-green-dark)] mt-4">${story.name}</h4>
+                    <p class="text-sm text-gray-500">Certificado en: ${story.norm}</p>
+                </div>`).join('');
+        }
+        
+        let currentPage = 'home'; let currentCategory = null; let currentNorm = null;
+
+        function showPage(pageId) {
+            document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
+            document.getElementById(`${pageId}-page`).classList.remove('hidden');
+            window.scrollTo(0, 0);
+            currentPage = pageId;
+            lucide.createIcons();
+        }
+
+        function navigateToNorms(categoryId) {
+            currentCategory = categoryId;
+            const category = appData.categories.find(c => c.id === categoryId);
+            document.getElementById('norms-category-title').textContent = `Normas de Competencia: ${category.name}`;
+            renderNormsList(categoryId);
+            showPage('norms');
+        }
+
+        function navigateToRegistration(normId) {
+            currentNorm = normId;
+            const norm = appData.norms.find(n => n.id === normId);
+            if (!norm) { showAlert('Error', 'Norma no encontrada.', 'error'); return; }
+            document.getElementById('registration-form').reset();
+            document.getElementById('form-norma-id').value = normId;
+            document.getElementById('form-norma-name').textContent = norm.name;
+            showPage('registration');
+            assignCenterToApplicant(normId);
+        }
+
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                showPage(e.target.dataset.page);
+                const mobileMenu = document.getElementById('mobile-menu');
+                if(!mobileMenu.classList.contains('hidden')) {
+                    mobileMenu.classList.add('hidden');
+                    document.getElementById('menu-open-icon').classList.remove('hidden');
+                    document.getElementById('menu-close-icon').classList.add('hidden');
+                }
+            });
+        });
+        
+        document.querySelectorAll('.back-to-home').forEach(btn => btn.addEventListener('click', () => showPage('home')));
+        document.querySelector('.back-to-norms').addEventListener('click', () => { if(currentCategory) navigateToNorms(currentCategory); else showPage('home'); });
+        document.getElementById('mobile-menu-btn').addEventListener('click', () => {
+            const menu = document.getElementById('mobile-menu');
+            menu.classList.toggle('hidden');
+            document.getElementById('menu-open-icon').classList.toggle('hidden');
+            document.getElementById('menu-close-icon').classList.toggle('hidden');
+        });
+
+        function renderNormsList(categoryId) {
+            const container = document.getElementById('norms-list');
+            const relevantNorms = appData.norms.filter(n => n.categoryId === categoryId);
+            if (relevantNorms.length === 0) {
+                container.innerHTML = '<div class="bg-white p-6 rounded-lg shadow-md text-center">No hay normas disponibles para esta categoría en este momento.</div>'; return;
+            }
+            container.innerHTML = relevantNorms.map(norm => `
+                <div class="bg-white p-6 rounded-lg shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                    <div>
+                        <h3 class="text-xl font-bold text-[var(--sena-green-dark)]">${norm.name}</h3>
+                        <p class="text-gray-600 mt-2">${norm.description}</p>
+                    </div>
+                    <button class="bg-[var(--sena-orange)] text-white font-bold py-2 px-6 rounded-full hover:bg-opacity-90 transition-all shadow-lg flex-shrink-0" onclick="window.app.navigateToRegistration('${norm.id}')">Inscribirse</button>
+                </div>`).join('');
+        }
+
+        async function assignCenterToApplicant(normId) {
+            const centerDisplay = document.getElementById('form-assigned-center');
+            const centerIdInput = document.getElementById('form-assigned-center-id');
+            centerDisplay.textContent = 'Buscando cupo disponible...';
+            centerIdInput.value = '';
+            const eligibleCenters = appData.centers.filter(center => center.slots && center.slots[normId] && center.slots[normId] > 0);
+            if (eligibleCenters.length === 0) {
+                centerDisplay.textContent = 'No hay cupos disponibles en este momento.';
+                centerDisplay.classList.add('text-red-500');
+                document.querySelector('#registration-form button[type="submit"]').disabled = true;
+                return;
+            }
+            eligibleCenters.sort((a, b) => (b.slots[normId] || 0) - (a.slots[normId] || 0));
+            const assignedCenter = eligibleCenters[0];
+            centerDisplay.textContent = assignedCenter.name;
+            centerDisplay.classList.remove('text-red-500');
+            centerDisplay.classList.add('text-[var(--sena-orange)]');
+            centerIdInput.value = assignedCenter.id;
+            document.querySelector('#registration-form button[type="submit"]').disabled = false;
+        }
+
+        document.getElementById('registration-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const applicationData = {
+                name: form.elements[2].value + ' ' + form.elements[3].value, email: form.elements[4].value, docType: form.elements[5].value, docNumber: form.elements[6].value,
+                birthDate: form.elements[7].value, gender: form.elements[8].value, department: form.elements[10].value, municipality: form.elements[11].value,
+                address: form.elements[12].value, educationLevel: form.elements[13].value, laboralStatus: form.elements[14].value,
+                normId: document.getElementById('form-norma-id').value, centerId: document.getElementById('form-assigned-center-id').value,
+                status: 'Inscrito', createdAt: new Date().toISOString()
+            };
+            if (!applicationData.centerId) { showAlert('Error', 'No se ha podido asignar un centro. No hay cupos disponibles.', 'error'); return; }
+            showLoading(true);
+            try {
+                await addDoc(collection(db, `artifacts/${appId}/public/data/applications`), applicationData);
+                const centerRef = doc(db, `artifacts/${appId}/public/data/centers`, applicationData.centerId);
+                const centerDoc = await getDoc(centerRef);
+                if (centerDoc.exists()) {
+                    const centerData = centerDoc.data();
+                    const currentSlots = centerData.slots ? (centerData.slots[applicationData.normId] || 0) : 0;
+                    if (currentSlots > 0) {
+                        await updateDoc(centerRef, { [`slots.${applicationData.normId}`]: currentSlots - 1 });
+                    }
+                }
+                showLoading(false);
+                document.getElementById('success-center-name').textContent = document.getElementById('form-assigned-center').textContent;
+                showPage('success');
+            } catch (error) {
+                showLoading(false);
+                console.error("Error submitting registration:", error);
+                showAlert('Error de Envío', 'Hubo un problema al registrar tu inscripción. Por favor, inténtalo de nuevo.', 'error');
+            }
+        });
+        
+        let isAdminLoggedIn = false; let isDevLoggedIn = false;
+
+        document.getElementById('admin-panel-btn').addEventListener('click', () => {
+            document.getElementById('public-pages').classList.add('hidden');
+            document.getElementById('admin-panel').classList.remove('hidden');
+            if (!isAdminLoggedIn) document.getElementById('admin-login-overlay').style.display = 'flex';
+        });
+
+        document.getElementById('admin-login-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (document.getElementById('admin-password').value === siteConfig.adminPass) {
+                isAdminLoggedIn = true;
+                document.getElementById('admin-login-overlay').style.display = 'none';
+                document.getElementById('admin-interface').classList.remove('hidden');
+                document.querySelector('.admin-nav-link[data-section="dashboard"]').click();
+            } else { showAlert('Error', 'Contraseña incorrecta', 'error'); }
+        });
+
+        document.getElementById('admin-logout-btn').addEventListener('click', () => {
+            isAdminLoggedIn = false; isDevLoggedIn = false;
+            document.getElementById('admin-interface').classList.add('hidden');
+            document.getElementById('admin-panel').classList.add('hidden');
+            document.getElementById('public-pages').classList.remove('hidden');
+            document.getElementById('admin-password').value = '';
+            document.getElementById('dev-password').value = '';
+            document.getElementById('dev-content').classList.add('hidden');
+            document.getElementById('dev-login-overlay').style.display = 'flex';
+            document.getElementById('dev-logout-btn').classList.add('hidden');
+            showPage('home');
+        });
+
+        document.querySelectorAll('.admin-nav-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const section = e.currentTarget.dataset.section;
+                if (section === 'dev-zone' && !isDevLoggedIn) {
+                    document.getElementById('dev-login-overlay').style.display = 'flex'; return;
+                }
+                document.querySelectorAll('.admin-section').forEach(s => s.classList.add('hidden'));
+                document.getElementById(`admin-${section}`).classList.remove('hidden');
+                document.querySelectorAll('.admin-nav-link').forEach(l => l.classList.remove('active'));
+                e.currentTarget.classList.add('active');
+                lucide.createIcons();
+            });
+        });
+
+        document.getElementById('dev-login-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (document.getElementById('dev-password').value === siteConfig.devPass) {
+                isDevLoggedIn = true;
+                document.getElementById('dev-login-overlay').style.display = 'none';
+                document.getElementById('dev-content').classList.remove('hidden');
+                document.getElementById('dev-logout-btn').classList.remove('hidden');
+                updateAdminUI();
+            } else { showAlert('Error', 'Contraseña de desarrollador incorrecta', 'error'); }
+        });
+
+        document.getElementById('dev-logout-btn').addEventListener('click', () => {
+            isDevLoggedIn = false;
+            document.getElementById('dev-content').classList.add('hidden');
+            document.getElementById('dev-login-overlay').style.display = 'flex';
+            document.getElementById('dev-logout-btn').classList.add('hidden');
+            document.getElementById('dev-password').value = '';
+            document.querySelector('.admin-nav-link[data-section="dashboard"]').click();
+        });
+        
+        let categoryChart, centerChart;
+        function updateAdminDashboard() {
+            if(!appData.applications) return;
+            document.getElementById('stats-total').textContent = appData.applications.length;
+            const totalSlots = appData.centers.reduce((sum, center) => sum + (center.slots ? Object.values(center.slots).reduce((s, val) => s + val, 0) : 0), 0);
+            document.getElementById('stats-total-slots').textContent = totalSlots;
+
+            const categoryCounts = appData.applications.reduce((acc, app) => {
+                const norm = appData.norms.find(n => n.id === app.normId);
+                if (norm) acc[norm.categoryId] = (acc[norm.categoryId] || 0) + 1;
+                return acc;
+            }, {});
+            const topCatId = Object.keys(categoryCounts).sort((a,b) => categoryCounts[b] - categoryCounts[a])[0];
+            const topCat = appData.categories.find(c => c.id === topCatId);
+            document.getElementById('stats-top-category').textContent = topCat ? topCat.name : '-';
+            
+            const centerCounts = appData.applications.reduce((acc, app) => { acc[app.centerId] = (acc[app.centerId] || 0) + 1; return acc; }, {});
+            const topCenterId = Object.keys(centerCounts).sort((a,b) => centerCounts[b] - centerCounts[a])[0];
+            const topCenter = appData.centers.find(c => c.id === topCenterId);
+            document.getElementById('stats-top-center').textContent = topCenter ? topCenter.name.substring(0, 20) + '...' : '-';
+
+            if (categoryChart) categoryChart.destroy();
+            categoryChart = new Chart(document.getElementById('category-chart').getContext('2d'), { type: 'doughnut', data: { labels: appData.categories.map(c => c.name), datasets: [{ data: appData.categories.map(c => categoryCounts[c.id] || 0), backgroundColor: ['#39A900', '#00324D', '#FF6C00', '#f59e0b', '#10b981'] }] }, options: { responsive: true, maintainAspectRatio: false } });
+            if (centerChart) centerChart.destroy();
+            centerChart = new Chart(document.getElementById('center-chart').getContext('2d'), { type: 'bar', data: { labels: appData.centers.map(c => c.name.substring(0, 15) + '...'), datasets: [{ label: 'Asignaciones', data: appData.centers.map(c => centerCounts[c.id] || 0), backgroundColor: '#FF6C00' }] }, options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y' } });
+        }
+        
+        document.getElementById('generate-ai-analysis-btn').addEventListener('click', async () => {
+            const resultDiv = document.getElementById('ai-analysis-result');
+            resultDiv.classList.remove('hidden');
+            resultDiv.innerHTML = '<p>Generando análisis... <span class="animate-pulse">🧠</span></p>';
+            const dataSummary = { totalApplications: appData.applications.length, applicationsPerCategory: appData.categories.map(c => ({ name: c.name, count: appData.applications.filter(app => { const norm = appData.norms.find(n => n.id === app.normId); return norm && norm.categoryId === c.id; }).length })), slotsPerCenter: appData.centers.map(c => ({ name: c.name, availableSlots: c.slots ? Object.values(c.slots).reduce((a,b) => a+b, 0) : 0, assigned: appData.applications.filter(app => app.centerId === c.id).length })) };
+            const prompt = `Eres un analista de datos experto para el SENA. Basado en los siguientes datos de la plataforma Certificatones en formato JSON, genera un breve análisis (máximo 3 párrafos) con insights clave y 3 recomendaciones accionables. Sé conciso y directo. Datos: ${JSON.stringify(dataSummary)}`;
+            try {
+                const apiKey = ""; const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
+                if (!response.ok) throw new Error(`API call failed with status: ${response.status}`);
+                const result = await response.json();
+                const text = result.candidates[0].content.parts[0].text;
+                resultDiv.innerHTML = text.replace(/\n/g, '<br>');
+            } catch (error) {
+                console.error("AI Analysis Error:", error);
+                resultDiv.innerHTML = `<p class="text-red-600">Error al generar el análisis. Esta es una demostración.</p><br><p><strong>Análisis Clave:</strong> Se observa una alta demanda en la categoría <strong>Nacional</strong>. El centro de <strong>Bogotá</strong> está cerca de su capacidad máxima, mientras que <strong>Antioquia</strong> tiene alta disponibilidad de cupos.</p><p><strong>Recomendaciones:</strong></p><ol class="list-decimal list-inside"><li>Lanzar una campaña de marketing en Antioquia.</li><li>Considerar la apertura de nuevas normas en la categoría <strong>Mujeres</strong>.</li><li>Evaluar la reasignación de cupos en el centro de Bogotá.</li></ol>`;
+            }
+        });
+        
+        function renderReportsTable(filteredData = null, tableBodyId) {
+            const tableBody = document.getElementById(tableBodyId);
+            if(!tableBody) return;
+            const dataToRender = filteredData || appData.applications;
+            if(dataToRender.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="6" class="text-center p-6">No se encontraron inscripciones.</td></tr>'; return;
+            }
+            tableBody.innerHTML = dataToRender.map(app => {
+                const norm = appData.norms.find(n => n.id === app.normId);
+                const center = appData.centers.find(c => c.id === app.centerId);
+                return `
+                    <tr class="bg-white border-b">
+                        <td class="px-6 py-4 font-medium text-gray-900">${app.name}</td>
+                        <td class="px-6 py-4">${app.docType}: ${app.docNumber}</td>
+                        <td class="px-6 py-4">${norm ? norm.name : 'N/A'}</td>
+                        <td class="px-6 py-4">${center ? center.name.substring(0,30)+'...' : 'N/A'}</td>
+                        <td class="px-6 py-4">${app.status}</td>
+                        <td class="px-6 py-4 flex gap-2">
+                            <button class="text-blue-600 hover:text-blue-800" title="Editar (Demo)"><i data-lucide="edit"></i></button>
+                            <button class="text-red-600 hover:text-red-800" title="Eliminar (Demo)"><i data-lucide="trash-2"></i></button>
+                        </td>
+                    </tr>`;
+            }).join('');
+            lucide.createIcons();
+        }
+        
+        function populateReportFilters() {
+            const normSelect = document.getElementById('public-report-filter-norm');
+            const centerSelect = document.getElementById('public-report-filter-center');
+            normSelect.innerHTML = '<option value="">Todas las Normas</option>' + appData.norms.map(n => `<option value="${n.id}">${n.name}</option>`).join('');
+            centerSelect.innerHTML = '<option value="">Todos los Centros</option>' + appData.centers.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+        }
+
+        document.getElementById('public-apply-report-filters').addEventListener('click', () => {
+            const nameFilter = document.getElementById('public-report-filter-name').value.toLowerCase();
+            const normFilter = document.getElementById('public-report-filter-norm').value;
+            const centerFilter = document.getElementById('public-report-filter-center').value;
+
+            const filtered = appData.applications.filter(app => {
+                const norm = appData.norms.find(n => n.id === app.normId);
+                return (!nameFilter || app.name.toLowerCase().includes(nameFilter)) &&
+                       (!normFilter || app.normId === normFilter) &&
+                       (!centerFilter || app.centerId === centerFilter);
+            });
+            renderReportsTable(filtered, 'public-reports-table-body');
+        });
+
+        function updateAdminUI() {
+            if (!isDevLoggedIn) return;
+            renderCentersList(); renderCategoryNormManagement(); renderNewsManagement(); renderStoriesManagement(); populateSiteConfigForm();
+        }
+        function renderCentersList() { /* ... */ }
+        function renderCategoryNormManagement() { /* ... */ }
+        function renderNewsManagement() { /* ... */ }
+        function renderStoriesManagement() { /* ... */ }
+        function populateSiteConfigForm() {
+            const form = document.getElementById('site-config-form');
+            const fields = Object.keys(siteConfig).filter(k => k !== 'adminPass' && k !== 'devPass');
+            form.innerHTML = fields.map(key => `<div><label for="config-${key}" class="text-sm font-medium text-gray-700">${key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}</label><input type="text" id="config-${key}" name="${key}" value="${siteConfig[key]}" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm"></div>`).join('') + `<button type="submit" class="bg-[var(--sena-orange)] text-white font-bold px-5 py-2 rounded-md mt-4">Guardar Configuración</button>`;
+        }
+        
+        document.getElementById('site-config-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const newConfig = { ...siteConfig };
+            for (let [key, value] of formData.entries()) newConfig[key] = value;
+            try {
+                await setDoc(doc(db, `artifacts/${appId}/public/data/config/main`), newConfig);
+                showAlert('Éxito', 'La configuración del sitio ha sido actualizada.', 'success');
+            } catch (error) { console.error("Error updating config:", error); showAlert('Error', 'No se pudo actualizar la configuración.', 'error'); }
+        });
+
+        function updateDynamizerLogin() {
+            const select = document.getElementById('dynamizer-center-select');
+            select.innerHTML = '<option value="">Selecciona tu Centro de Formación</option>' + appData.centers.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+        }
+        document.getElementById('dynamizer-login-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const centerId = document.getElementById('dynamizer-center-select').value;
+            if (!centerId) { showAlert('Atención', 'Debes seleccionar un centro.', 'warning'); return; }
+            const center = appData.centers.find(c => c.id === centerId);
+            document.getElementById('dynamizer-panel').classList.remove('hidden');
+            document.getElementById('dynamizer-panel-center-name').textContent = center.name;
+            renderDynamizerTable(centerId);
+        });
+        document.getElementById('dynamizer-logout-btn').addEventListener('click', () => {
+            document.getElementById('dynamizer-panel').classList.add('hidden');
+            document.getElementById('dynamizer-login-form').reset();
+        });
+        function renderDynamizerTable(centerId) {
+            const tableBody = document.getElementById('dynamizer-table-body');
+            const aspirants = appData.applications.filter(app => app.centerId === centerId);
+            if(aspirants.length === 0) { tableBody.innerHTML = '<tr><td colspan="6" class="text-center p-6">No hay aspirantes asignados a este centro.</td></tr>'; return; }
+            tableBody.innerHTML = aspirants.map(app => {
+                 const norm = appData.norms.find(n => n.id === app.normId);
+                 return `<tr class="bg-white border-b"><td class="px-6 py-4 font-medium">${app.name}</td><td class="px-6 py-4">${app.email}</td><td class="px-6 py-4">${norm ? norm.name : 'N/A'}</td><td class="px-6 py-4">${app.status}</td><td class="px-6 py-4">${app.observations || ''}</td><td class="px-6 py-4"><button class="text-blue-600 hover:underline">Gestionar</button></td></tr>`;
+            }).join('');
+        }
+        
+        const colombiaGeo = { "Antioquia": ["Medellín", "Bello", "Itagüí"], "Atlántico": ["Barranquilla", "Soledad", "Malambo"], "Bogotá D.C.": ["Bogotá"], "Bolívar": ["Cartagena", "Magangué"], "Boyacá": ["Tunja", "Duitama", "Sogamoso"], "Caldas": ["Manizales", "La Dorada"], "Caquetá": ["Florencia"], "Cauca": ["Popayán", "Santander de Quilichao"], "Cesar": ["Valledupar", "Aguachica"], "Chocó": ["Quibdó"], "Córdoba": ["Montería", "Lorica"], "Cundinamarca": ["Soacha", "Girardot", "Fusagasugá"], "Huila": ["Neiva", "Pitalito", "Garzón"], "La Guajira": ["Riohacha", "Maicao"], "Magdalena": ["Santa Marta", "Ciénaga"], "Meta": ["Villavicencio", "Acacías"], "Nariño": ["Pasto", "Tumaco", "Ipiales"], "Norte de Santander": ["Cúcuta", "Ocaña", "Pamplona"], "Quindío": ["Armenia", "Calarcá"], "Risaralda": ["Pereira", "Dosquebradas"], "Santander": ["Bucaramanga", "Floridablanca", "Barrancabermeja", "Girón"], "Sucre": ["Sincelejo"], "Tolima": ["Ibagué", "Espinal"], "Valle del Cauca": ["Cali", "Buenaventura", "Palmira", "Tuluá"] };
+        function populateDepartments() {
+            const depSelect = document.getElementById('form-department');
+            depSelect.innerHTML = '<option value="">Departamento de Residencia</option>' + Object.keys(colombiaGeo).sort().map(dep => `<option value="${dep}">${dep}</option>`).join('');
+        }
+        document.getElementById('form-department').addEventListener('change', (e) => {
+            const munSelect = document.getElementById('form-municipality');
+            const department = e.target.value;
+            if (department && colombiaGeo[department]) {
+                munSelect.innerHTML = '<option value="">Municipio de Residencia</option>' + colombiaGeo[department].sort().map(mun => `<option value="${mun}">${mun}</option>`).join('');
+                munSelect.disabled = false;
+            } else {
+                munSelect.innerHTML = '<option value="">Municipio de Residencia</option>';
+                munSelect.disabled = true;
+            }
+        });
+
+        function main() {
+            showLoading(true);
+            initializeFirebase();
+            window.app = { navigateToNorms, navigateToRegistration };
+            const root = document.documentElement;
+            root.style.setProperty('--x', `${Math.random() * 100}%`); root.style.setProperty('--y', `${Math.random() * 100}%`);
+            root.style.setProperty('--x2', `${Math.random() * 100}%`); root.style.setProperty('--y2', `${Math.random() * 100}%`);
+            root.style.setProperty('--tx', `${(Math.random() - 0.5) * 200}px`); root.style.setProperty('--ty', `${(Math.random() - 0.5) * 200}px`);
+            populateDepartments();
+        }
+        window.addEventListener('load', main);
+    </script>
+
+</body>
+</html>
